@@ -1,6 +1,6 @@
 'use client';
 
-import { BatteryMedium, TrendingUp, TrendingDown } from 'lucide-react';
+import { BatteryMedium, TrendingUp, TrendingDown, BatteryWarning } from 'lucide-react';
 import type { BodyBatteryData } from '@/lib/types';
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from 'recharts';
 
@@ -15,6 +15,26 @@ function batteryColor(value: number) {
 }
 
 export default function BodyBatteryCard({ bodyBattery }: Props) {
+  // ── Device doesn't support Body Battery ────────────────────────────────────
+  if (!bodyBattery.isAvailable) {
+    return (
+      <div className="card">
+        <div className="card-header">
+          <BatteryMedium size={14} className="text-battery" />
+          <span>Body Battery</span>
+        </div>
+        <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+          <BatteryWarning size={32} className="text-muted" />
+          <p className="text-xs text-secondary font-medium">No disponible</p>
+          <p className="text-[10px] text-muted max-w-[180px]">
+            Tu dispositivo Garmin no es compatible con Body Battery
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Normal state ────────────────────────────────────────────────────────────
   const color = batteryColor(bodyBattery.current);
 
   return (

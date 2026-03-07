@@ -33,6 +33,7 @@ export const mockData: DailyMetrics = {
     trend: [45, 48, 44, 51, 49, 53, 52],
   },
   bodyBattery: {
+    isAvailable: true,
     current: 68,
     charged: 82,
     drained: 14,

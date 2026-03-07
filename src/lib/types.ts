@@ -20,6 +20,8 @@ export interface HRVData {
 }
 
 export interface BodyBatteryData {
+  /** false when the device doesn't support Body Battery (all endpoints return 404) */
+  isAvailable: boolean;
   current: number;
   charged: number;
   drained: number;

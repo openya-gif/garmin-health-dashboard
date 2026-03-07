@@ -99,7 +99,8 @@ function parseHRV(raw: Record<string, unknown>, trend: number[]): HRVData {
 
 function parseBodyBattery(raw: unknown[]): BodyBatteryData {
   if (!Array.isArray(raw) || raw.length === 0) {
-    return { current: 50, charged: 80, drained: 30, data: [] };
+    // Device does not support Body Battery — all endpoints return 404
+    return { isAvailable: false, current: 0, charged: 0, drained: 0, data: [] };
   }
   const readings = raw.map((r: unknown) => {
     const rec = r as Record<string, unknown>;
@@ -111,6 +112,7 @@ function parseBodyBattery(raw: unknown[]): BodyBatteryData {
   });
   const latest = raw[raw.length - 1] as Record<string, unknown>;
   return {
+    isAvailable: true,
     current: (latest?.dynamicFeedbackScore ?? latest?.bodyBatteryScore ?? 50) as number,
     charged: Math.max(...readings.map(r => r.value)),
     drained: Math.min(...readings.map(r => r.value)),
@@ -193,7 +195,14 @@ export async function fetchDailyMetrics(dateStr?: string): Promise<DailyMetrics>
       return offsets.map((o, i) => (i === 6 ? lastNight || weeklyAvg : Math.max(1, weeklyAvg + o + (seed % (i + 2)) - 1)));
     };
     // Parse today's HRV early to build the trend
-    const todayHrvRaw = (hrvRes.status === 'fulfilled' ? hrvRes.value : {}) as Record<string, unknown>;
+    // Guard: API returns "" (empty string) when device hasn't synced yet — treat as {}
+    const todayHrvRaw = (
+      hrvRes.status === 'fulfilled' &&
+      typeof hrvRes.value === 'object' &&
+      hrvRes.value !== null
+        ? hrvRes.value
+        : {}
+    ) as Record<string, unknown>;
     const todayHrvSummary = (todayHrvRaw?.hrvSummary ?? todayHrvRaw) as Record<string, unknown>;
     const weeklyAvgEarly = (todayHrvSummary?.weeklyAvg ?? todayHrvSummary?.weeklyAverage ?? 0) as number;
     const lastNightEarly = (todayHrvSummary?.lastNight ?? todayHrvSummary?.lastNightAvg ?? 0) as number;
@@ -204,7 +213,11 @@ export async function fetchDailyMetrics(dateStr?: string): Promise<DailyMetrics>
     sleep.sleepScore = sleepScore;
 
     const hrv = parseHRV(
-      hrvRes.status === 'fulfilled' ? hrvRes.value as Record<string, unknown> : {},
+      hrvRes.status === 'fulfilled' &&
+      typeof hrvRes.value === 'object' &&
+      hrvRes.value !== null
+        ? hrvRes.value as Record<string, unknown>
+        : {},
       hrvTrend,
     );
 
