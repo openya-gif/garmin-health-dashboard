@@ -487,6 +487,14 @@ const en = {
     testTitle: '⚡ Test notification',
     testBody: 'Body Battery at {threshold}% — this is how the alert will look when it drops below your threshold.',
   },
+  benchmarks: {
+    excellent:     'Excellent',
+    good:          'Good',
+    average:       'Average',
+    below_average: 'Below avg',
+    low:           'Very low',
+    percentile:    'Percentile {pct}',
+  },
 };
 
 export default en;

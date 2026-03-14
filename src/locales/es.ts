@@ -487,6 +487,14 @@ const es = {
     testTitle: '⚡ Notificación de prueba',
     testBody: 'Body Battery al {threshold}% — así se verá la alerta cuando caiga por debajo de tu umbral.',
   },
+  benchmarks: {
+    excellent:     'Excelente',
+    good:          'Bueno',
+    average:       'Normal',
+    below_average: 'Bajo',
+    low:           'Muy bajo',
+    percentile:    'Percentil {pct}',
+  },
 };
 
 export default es;

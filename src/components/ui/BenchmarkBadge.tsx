@@ -1,7 +1,7 @@
 'use client';
 
 import type { MetricBenchmark } from '@/lib/benchmarks';
-import { formatPercentile } from '@/lib/benchmarks';
+import { useLang } from '@/lib/i18n';
 
 interface Props {
   benchmark: MetricBenchmark;
@@ -17,9 +17,10 @@ interface Props {
  * - The demographic reference line (e.g. "Hombres 35–44 años")
  */
 export default function BenchmarkBadge({ benchmark, className }: Props) {
+  const { t } = useLang();
   const {
     percentile,
-    label,
+    category,
     color,
     p25,
     p50,
@@ -27,6 +28,11 @@ export default function BenchmarkBadge({ benchmark, className }: Props) {
     unit,
     demographicLabel,
   } = benchmark;
+
+  const pctLabel = percentile >= 50
+    ? (percentile >= 90 ? 'Top 10%' : percentile >= 75 ? 'Top 25%' : percentile >= 60 ? 'Top 40%' : 'Top 50%')
+    : t('benchmarks.percentile', { pct: percentile });
+  const catLabel = t(`benchmarks.${category}`);
 
   // Clamp marker to leave a little room at both ends for the dot
   const markerPct = Math.min(94, Math.max(6, percentile));
@@ -41,7 +47,7 @@ export default function BenchmarkBadge({ benchmark, className }: Props) {
           className="text-[10px] font-bold px-2 py-0.5 rounded-full"
           style={{ color, backgroundColor: `${color}18` }}
         >
-          {formatPercentile(percentile)} · {label}
+          {pctLabel} · {catLabel}
         </span>
       </div>
 
