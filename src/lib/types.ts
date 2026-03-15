@@ -89,6 +89,7 @@ export interface UserProfile {
   fitnessLevel: FitnessLevel;
   goal: Goal;
   setupCompleted: boolean;
+  units?: 'metric' | 'imperial';
 }
 
 export interface DailyMetrics {

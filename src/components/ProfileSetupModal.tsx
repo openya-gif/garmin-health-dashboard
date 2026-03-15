@@ -3,12 +3,14 @@
 import { Activity } from 'lucide-react';
 import ProfileForm from './ProfileForm';
 import type { UserProfile } from '@/lib/types';
+import { useLang } from '@/lib/i18n';
 
 interface Props {
   onComplete: (profile: UserProfile) => void;
 }
 
 export default function ProfileSetupModal({ onComplete }: Props) {
+  const { t } = useLang();
   return (
     <div className="fixed inset-0 z-50 bg-bg/95 backdrop-blur flex flex-col">
       {/* Scrollable content */}
@@ -21,9 +23,9 @@ export default function ProfileSetupModal({ onComplete }: Props) {
               <Activity size={32} className="text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-primary">Bienvenido</h1>
+              <h1 className="text-xl font-bold text-primary">{t('profile.setupTitle')}</h1>
               <p className="text-sm text-secondary mt-1">
-                Cuéntanos un poco sobre ti para personalizar<br />tus métricas de salud.
+                {t('profile.setupSubtitle')}
               </p>
             </div>
           </div>
@@ -32,8 +34,7 @@ export default function ProfileSetupModal({ onComplete }: Props) {
           <div className="bg-surface/60 border border-border rounded-2xl px-4 py-3 flex gap-3">
             <span className="text-lg">📊</span>
             <p className="text-xs text-secondary leading-relaxed">
-              Tu edad y nivel de actividad cambian lo que es &quot;normal&quot; para tu HRV, frecuencia cardíaca y sueño.
-              Un HRV de 45ms puede ser excelente para alguien de 50 años, pero bajo para un atleta de 25.
+              {t('profile.setupExplainer')}
             </p>
           </div>
 
@@ -41,7 +42,7 @@ export default function ProfileSetupModal({ onComplete }: Props) {
           <div className="bg-surface border border-border rounded-2xl p-4">
             <ProfileForm
               onSave={onComplete}
-              ctaLabel="Comenzar →"
+              ctaLabel={t('profile.setupCta')}
             />
           </div>
         </div>
