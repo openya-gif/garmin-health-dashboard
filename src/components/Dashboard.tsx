@@ -122,9 +122,14 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-2">
-              {data?.isDemo && (
+              {data?.isDemo && data.demoReason !== 'login_failed' && data.demoReason !== 'fetch_error' && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
                   {t('common.demo')}
+                </span>
+              )}
+              {data?.isDemo && (data.demoReason === 'login_failed' || data.demoReason === 'fetch_error') && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-400/10 text-orange-400 border border-orange-400/20">
+                  {t('common.garminUnavailable')}
                 </span>
               )}
               {lastSync && (
@@ -232,8 +237,10 @@ export default function Dashboard() {
 
               {/* Footer info */}
               <div className="text-center text-[10px] text-muted py-2">
-                {data.isDemo ? (
+                {data.isDemo && data.demoReason === 'no_credentials' ? (
                   <span>{t('dashboard.demoBadge')}</span>
+                ) : data.isDemo && (data.demoReason === 'login_failed' || data.demoReason === 'fetch_error') ? (
+                  <span>{t('dashboard.garminUnavailableBadge')}</span>
                 ) : (
                   <span>{t('dashboard.dataDate', { date: data.date })}</span>
                 )}

@@ -177,8 +177,18 @@ export async function fetchDailyMetrics(dateStr?: string): Promise<DailyMetrics>
   const cached = cache.get(date);
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
 
+  const hasCredentials = !!(process.env.GARMIN_USERNAME && process.env.GARMIN_PASSWORD)
+    || !!(process.env.GARMIN_OAUTH1 && process.env.GARMIN_OAUTH2);
+
   const client = await getClient();
-  if (!client) return { ...mockData, date };
+  if (!client) {
+    return {
+      ...mockData,
+      date,
+      isDemo: true,
+      demoReason: hasCredentials ? 'login_failed' : 'no_credentials',
+    };
+  }
 
   try {
     const gc = client as Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -353,8 +363,7 @@ export async function fetchDailyMetrics(dateStr?: string): Promise<DailyMetrics>
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Garmin] fetch failed:', msg);
-    // Return partial mock but mark it so we can debug
-    return { ...mockData, date, isDemo: true };
+    return { ...mockData, date, isDemo: true, demoReason: 'fetch_error' };
   }
 }
 

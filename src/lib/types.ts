@@ -92,9 +92,12 @@ export interface UserProfile {
   units?: 'metric' | 'imperial';
 }
 
+export type DemoReason = 'no_credentials' | 'login_failed' | 'fetch_error';
+
 export interface DailyMetrics {
   date: string;
   isDemo: boolean;
+  demoReason?: DemoReason;
   recovery: RecoveryData;
   sleep: SleepData;
   hrv: HRVData;
