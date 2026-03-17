@@ -441,6 +441,11 @@ const es = {
     fcInfo: 'FC máx: {maxHR} · FC reposo: {restHR} bpm',
     fcMaxObserved: '{hr} bpm (observada)',
     fcMaxEstimated: '{hr} bpm (Tanaka)',
+    z1: { name: 'Recuperación',    desc: 'Muy suave — activa la recuperación' },
+    z2: { name: 'Aeróbico',        desc: 'Base aeróbica — quema de grasa' },
+    z3: { name: 'Tempo',           desc: 'Umbral aeróbico — mejora el VO2max' },
+    z4: { name: 'Umbral láctico',  desc: 'Zona dura — mejora el umbral láctico' },
+    z5: { name: 'VO2max',          desc: 'Máximo esfuerzo — zona anaeróbica' },
   },
   vo2max: {
     title: 'VO2max estimado',

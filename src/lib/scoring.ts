@@ -321,11 +321,11 @@ export function calculateTrainingZones(
   const hrr = maxHR - restingHR;
 
   const defs: Array<[number, string, string, string, number, number]> = [
-    [1, 'Recuperación',   'Muy suave — activa la recuperación',    '#818cf8', 0.50, 0.60],
-    [2, 'Aeróbico',       'Base aeróbica — quema de grasa',         '#38bdf8', 0.60, 0.70],
-    [3, 'Tempo',          'Umbral aeróbico — mejora el VO2max',    '#4ade80', 0.70, 0.80],
-    [4, 'Umbral láctico', 'Zona dura — mejora el umbral láctico',  '#fb923c', 0.80, 0.90],
-    [5, 'VO2max',         'Máximo esfuerzo — zona anaeróbica',     '#f87171', 0.90, 1.00],
+    [1, 'trainingZones.z1.name', 'trainingZones.z1.desc', '#818cf8', 0.50, 0.60],
+    [2, 'trainingZones.z2.name', 'trainingZones.z2.desc', '#38bdf8', 0.60, 0.70],
+    [3, 'trainingZones.z3.name', 'trainingZones.z3.desc', '#4ade80', 0.70, 0.80],
+    [4, 'trainingZones.z4.name', 'trainingZones.z4.desc', '#fb923c', 0.80, 0.90],
+    [5, 'trainingZones.z5.name', 'trainingZones.z5.desc', '#f87171', 0.90, 1.00],
   ];
 
   return defs.map(([zone, name, description, color, lo, hi]) => ({

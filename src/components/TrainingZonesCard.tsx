@@ -54,7 +54,7 @@ export default function TrainingZonesCard({ restingHR, age, observedMaxHR, lastA
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-primary">{zone.name}</span>
+                  <span className="text-xs font-semibold text-primary">{t(zone.name)}</span>
                   <span className="text-xs font-mono font-semibold" style={{ color: zone.color }}>
                     {zone.hrLow}–{zone.hrHigh} <span className="text-muted font-normal text-[9px]">bpm</span>
                   </span>
@@ -66,7 +66,7 @@ export default function TrainingZonesCard({ restingHR, age, observedMaxHR, lastA
                     style={{ width: `${widthPct}%`, backgroundColor: zone.color, opacity: 0.7 }}
                   />
                 </div>
-                <p className="text-[9px] text-muted mt-0.5">{zone.description}</p>
+                <p className="text-[9px] text-muted mt-0.5">{t(zone.description)}</p>
               </div>
 
               {isActive && (
