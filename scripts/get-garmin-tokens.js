@@ -70,10 +70,20 @@ async function completeMfaLogin(httpClient, mfaHtml) {
     ? actionMatch[1].replace(/&amp;/g, '&')
     : 'https://sso.garmin.com/sso/verifyMFA/loginEnterMfaCode';
 
-  // Parse CSRF token
-  const csrfMatch = mfaHtml.match(/name=["']?_csrf["']?[^>]+value="([^"]+)"/i)
-    || mfaHtml.match(/value="([^"]+)"[^>]+name=["']?_csrf["']?/i);
-  if (!csrfMatch) {
+  // Parse CSRF token — find the <input> element that mentions _csrf, then extract value
+  // This handles any attribute order and quote style
+  const csrfInputEl = mfaHtml.match(/<input[^>]+_csrf[^>]*>/i);
+  const csrfToken = csrfInputEl
+    ? (csrfInputEl[0].match(/value=["']([^"']+)["']/i) || [])[1]
+    : null;
+
+  // Fallback: try meta tag or JS variable (some Garmin pages embed it differently)
+  const csrfFallback = !csrfToken
+    ? (mfaHtml.match(/["']_csrf["']\s*[,:]\s*["']([^"']+)["']/i) || [])[1]
+    : null;
+
+  const csrf = csrfToken || csrfFallback;
+  if (!csrf) {
     throw new Error(
       'Could not find CSRF token in MFA page.\n' +
       'Please open a GitHub issue at https://github.com/cggmx/garmin-health-dashboard/issues'
@@ -91,7 +101,7 @@ async function completeMfaLogin(httpClient, mfaHtml) {
   // POST MFA using URLSearchParams (no extra dependencies, works on all platforms)
   const params = new URLSearchParams();
   params.set(fieldName, mfaCode.trim());
-  params.set('_csrf', csrfMatch[1]);
+  params.set('_csrf', csrf);
   params.set('embed', 'true');
   params.set('fromPage', 'setupPasswordPage');
 
