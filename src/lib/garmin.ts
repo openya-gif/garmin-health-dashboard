@@ -394,7 +394,7 @@ async function fetchDayTrend(gc: GCClient, GC_API: string, date: string, display
   const fullCached = cache.get(date);
   if (fullCached && Date.now() - fullCached.ts < CACHE_TTL) {
     const d = fullCached.data;
-    return { hrv: d.hrv.lastNight, sleepHours: d.sleep.totalSleepSeconds / 3600, rhr: d.recovery.restingHR, strain: d.strain.daily };
+    return { hrv: d.hrv.lastNight, sleepHours: d.sleep.totalSleepSeconds / 3600, rhr: d.recovery.restingHR, strain: d.strain };
   }
 
   const today = new Date(date);
