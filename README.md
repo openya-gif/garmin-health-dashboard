@@ -165,6 +165,14 @@ MIT © 2025 — free to use, modify, and distribute. See [LICENSE](LICENSE).
 
 ---
 
+## Support
+
+This project is free and open-source. If it's useful to you and you'd like to support its development, you can buy me a coffee — completely optional, always appreciated. ☕
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-cggmx-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/cggmx)
+
+---
+
 ---
 
 # Español
@@ -329,3 +337,11 @@ Por el momento no. La app es self-hosted por diseño — tus credenciales de Gar
 ## Licencia
 
 MIT © 2025 — libre de usar, modificar y distribuir. Ver [LICENSE](LICENSE).
+
+---
+
+## Apoya el proyecto
+
+Este proyecto es gratuito y de código abierto. Si te resulta útil y quieres apoyar su desarrollo, puedes invitarme un café — completamente opcional, siempre agradecido. ☕
+
+[![Invítame un café](https://img.shields.io/badge/Invítame%20un%20café-cggmx-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/cggmx)
