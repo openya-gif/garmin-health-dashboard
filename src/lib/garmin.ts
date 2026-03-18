@@ -436,7 +436,7 @@ async function fetchDayTrend(gc: GCClient, GC_API: string, date: string, display
     const steps = Number(s.totalSteps ?? s.steps ?? 0);
     const totalCals = Number(s.totalKilocalories ?? s.activeKilocalories ?? 0);
     const floorsAscended = Number(s.floorsAscended ?? 0);
-    strain = calculateDailyStrain([], steps, totalCals, { highlyActiveSeconds, activeSeconds, floorsAscended, stressAverage: 0, restingHR: rhr });
+    strain = calculateDailyStrain([], steps, totalCals, { highlyActiveSeconds, activeSeconds, floorsAscended, stressAverage: 0 });
   }
 
   const result = { hrv: hrvMs, sleepHours: Math.round((sleepSeconds / 3600) * 10) / 10, rhr, strain };
