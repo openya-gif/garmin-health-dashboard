@@ -33,7 +33,7 @@ function buildDateLabels(points: TrendPoint[], step: number): (string | null)[] 
 }
 
 export default function HRVPage() {
-  const { t } = useLang();
+  const { t, tArr } = useLang();
   const [data, setData] = useState<DailyMetrics | null>(null);
   const [trends, setTrends] = useState<TrendPoint[] | null>(null);
   const [trendsLoading, setTrendsLoading] = useState(true);
@@ -360,7 +360,7 @@ export default function HRVPage() {
             <div>
               <p className="font-semibold text-primary mb-1">{t('hrv.info.reducersTitle')}</p>
               <div className="grid grid-cols-2 gap-1.5 mt-1">
-                {(t('hrv.info.reducers') as unknown as string[]).map((f: string) => (
+                {tArr('hrv.info.reducers').map((f: string) => (
                   <div key={f} className="flex items-center gap-1.5 text-[11px]">
                     <span className="text-recovery-red">↓</span>
                     <span>{f}</span>
@@ -372,7 +372,7 @@ export default function HRVPage() {
             <div>
               <p className="font-semibold text-primary mb-1">{t('hrv.info.improversTitle')}</p>
               <div className="grid grid-cols-2 gap-1.5 mt-1">
-                {(t('hrv.info.improvers') as unknown as string[]).map((f: string) => (
+                {tArr('hrv.info.improvers').map((f: string) => (
                   <div key={f} className="flex items-center gap-1.5 text-[11px]">
                     <span className="text-recovery-green">↑</span>
                     <span>{f}</span>

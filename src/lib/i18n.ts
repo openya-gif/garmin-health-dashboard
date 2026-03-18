@@ -28,17 +28,29 @@ export function interpolate(
   );
 }
 
+function resolveArr(obj: Record<string, unknown>, key: string): string[] {
+  const parts = key.split('.');
+  let cur: unknown = obj;
+  for (const p of parts) {
+    if (cur && typeof cur === 'object') cur = (cur as Record<string, unknown>)[p];
+    else return [];
+  }
+  return Array.isArray(cur) ? cur.map(String) : [];
+}
+
 // ── Context ───────────────────────────────────────────────────────────────────
 interface LangContextType {
   locale: Locale;
   setLocale: (l: Locale) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  tArr: (key: string) => string[];
 }
 
 const LangContext = createContext<LangContextType>({
   locale: 'es',
   setLocale: () => {},
   t: (key) => key,
+  tArr: () => [],
 });
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -69,7 +81,9 @@ export function LangProvider({ children }: { children: ReactNode }) {
   const t = (key: string, vars?: Record<string, string | number>) =>
     interpolate(resolve(messages, key) || key, vars);
 
-  return createElement(LangContext.Provider, { value: { locale, setLocale, t } }, children);
+  const tArr = (key: string): string[] => resolveArr(messages, key);
+
+  return createElement(LangContext.Provider, { value: { locale, setLocale, t, tArr } }, children);
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────

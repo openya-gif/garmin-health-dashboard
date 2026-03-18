@@ -287,9 +287,14 @@ export async function fetchDailyMetrics(dateStr?: string): Promise<DailyMetrics>
       stressRes.status === 'fulfilled' ? stressRes.value as Record<string, unknown> : {},
     );
 
-    const activities = parseActivities(
-      actsRes.status === 'fulfilled' ? actsRes.value as unknown[] ?? [] : [],
-    ).map(a => ({ ...a, strain: calculateStrainScore([a], restingHR || 60) }));
+    const allActivities = actsRes.status === 'fulfilled' ? actsRes.value as unknown[] ?? [] : [];
+    const todayActivities = allActivities.filter((a: unknown) => {
+      const act = a as Record<string, unknown>;
+      const ts = (act.startTimeLocal ?? act.startTimeGMT ?? act.activityDate ?? '') as string;
+      return String(ts).startsWith(date);
+    });
+    const activities = parseActivities(todayActivities)
+      .map(a => ({ ...a, strain: calculateStrainScore([a], restingHR || 60) }));
 
     const steps = stepsRes.status === 'fulfilled' ? (stepsRes.value as number) ?? 0 : 0;
     // Total daily calories from summary (includes BMR + NEAT + exercise)
@@ -369,7 +374,7 @@ export async function fetchDailyMetrics(dateStr?: string): Promise<DailyMetrics>
 
 // ─── Historical trend fetching (for 30/90d charts) ────────────────────────────
 
-interface DayTrendEntry { hrv: number; sleepHours: number; rhr: number; ts: number }
+interface DayTrendEntry { hrv: number; sleepHours: number; rhr: number; strain: number; ts: number }
 const dayTrendCache = new Map<string, DayTrendEntry>();
 const DAY_TREND_TTL = 4 * 60 * 60 * 1000; // 4h — historical data is immutable
 
@@ -379,30 +384,33 @@ const TRENDS_CACHE_TTL = 60 * 60 * 1000; // 1h
 
 type GCClient = Record<string, (...args: unknown[]) => Promise<unknown>>;
 
-async function fetchDayTrend(gc: GCClient, GC_API: string, date: string): Promise<{ hrv: number; sleepHours: number; rhr: number }> {
+async function fetchDayTrend(gc: GCClient, GC_API: string, date: string, displayName?: string): Promise<{ hrv: number; sleepHours: number; rhr: number; strain: number }> {
   // Check lightweight cache first
   const cached = dayTrendCache.get(date);
   if (cached && Date.now() - cached.ts < DAY_TREND_TTL) {
-    return { hrv: cached.hrv, sleepHours: cached.sleepHours, rhr: cached.rhr };
+    return { hrv: cached.hrv, sleepHours: cached.sleepHours, rhr: cached.rhr, strain: cached.strain ?? 0 };
   }
   // Re-use full DailyMetrics cache if available
   const fullCached = cache.get(date);
   if (fullCached && Date.now() - fullCached.ts < CACHE_TTL) {
     const d = fullCached.data;
-    return { hrv: d.hrv.lastNight, sleepHours: d.sleep.totalSleepSeconds / 3600, rhr: d.recovery.restingHR };
+    return { hrv: d.hrv.lastNight, sleepHours: d.sleep.totalSleepSeconds / 3600, rhr: d.recovery.restingHR, strain: d.strain.daily };
   }
 
   const today = new Date(date);
-  const [sleepRes, hrvRes, hrRes] = await Promise.allSettled([
+  const calls: Promise<unknown>[] = [
     gc.getSleepData(today),
     gc.get(`${GC_API}/hrv-service/hrv/${date}`),
     gc.getHeartRate(today),
-  ]);
+  ];
+  if (displayName) {
+    calls.push(gc.get(`${GC_API}/usersummary-service/usersummary/daily/${displayName}?calendarDate=${date}`));
+  }
+  const [sleepRes, hrvRes, hrRes, summaryRes] = await Promise.allSettled(calls);
 
   const sleepRaw = (sleepRes.status === 'fulfilled' ? sleepRes.value : {}) as Record<string, unknown>;
   const sleepDTO = (sleepRaw?.dailySleepDTO ?? sleepRaw ?? {}) as Record<string, unknown>;
   const sleepSeconds = (sleepDTO.sleepTimeSeconds ?? sleepDTO.totalSleepSeconds ?? 0) as number;
-  // HRV from sleep endpoint — fallback for devices without dedicated HRV endpoint
   const sleepHRV = Number(sleepDTO.averageHrvValue ?? sleepDTO.averageHRV ?? 0);
 
   const hrvRaw = (
@@ -419,7 +427,19 @@ async function fetchDayTrend(gc: GCClient, GC_API: string, date: string): Promis
     0
   );
 
-  const result = { hrv: hrvMs, sleepHours: Math.round((sleepSeconds / 3600) * 10) / 10, rhr };
+  // Estimate daily strain from usersummary aggregates (no per-activity data needed)
+  let strain = 0;
+  if (summaryRes && summaryRes.status === 'fulfilled' && summaryRes.value) {
+    const s = summaryRes.value as Record<string, unknown>;
+    const highlyActiveSeconds = Number(s.highlyActiveSeconds ?? 0);
+    const activeSeconds = Number(s.activeSeconds ?? 0);
+    const steps = Number(s.totalSteps ?? s.steps ?? 0);
+    const totalCals = Number(s.totalKilocalories ?? s.activeKilocalories ?? 0);
+    const floorsAscended = Number(s.floorsAscended ?? 0);
+    strain = calculateDailyStrain([], steps, totalCals, { highlyActiveSeconds, activeSeconds, floorsAscended, stressAverage: 0, restingHR: rhr });
+  }
+
+  const result = { hrv: hrvMs, sleepHours: Math.round((sleepSeconds / 3600) * 10) / 10, rhr, strain };
   dayTrendCache.set(date, { ...result, ts: Date.now() });
   return result;
 }
@@ -494,15 +514,22 @@ export async function fetchTrendData(range: number, endDateStr: string): Promise
     format(subDays(endDate, range - 1 - i), 'yyyy-MM-dd')
   );
 
+  // Fetch displayName once so fetchDayTrend can request usersummary for strain
+  let displayName: string | undefined;
+  try {
+    const profile = await gc.getUserProfile() as Record<string, unknown>;
+    displayName = (profile?.displayName ?? profile?.userName) as string | undefined;
+  } catch { /* optional */ }
+
   // Batch in groups of 7 to avoid overwhelming Garmin's API
   const BATCH = 7;
-  const rawPoints: Array<{ hrv: number; sleepHours: number; rhr: number }> = [];
+  const rawPoints: Array<{ hrv: number; sleepHours: number; rhr: number; strain: number }> = [];
 
   for (let i = 0; i < dates.length; i += BATCH) {
     const batch = dates.slice(i, i + BATCH);
-    const results = await Promise.allSettled(batch.map(d => fetchDayTrend(gc, GC_API, d)));
+    const results = await Promise.allSettled(batch.map(d => fetchDayTrend(gc, GC_API, d, displayName)));
     for (const r of results) {
-      rawPoints.push(r.status === 'fulfilled' ? r.value : { hrv: 0, sleepHours: 0, rhr: 0 });
+      rawPoints.push(r.status === 'fulfilled' ? r.value : { hrv: 0, sleepHours: 0, rhr: 0, strain: 0 });
     }
     if (i + BATCH < dates.length) {
       await new Promise(res => setTimeout(res, 200));
@@ -527,7 +554,7 @@ export async function fetchTrendData(range: number, endDateStr: string): Promise
           baselineRHR: baseRHR,
           sleepScore,
         });
-    return { date, hrv: pt.hrv, sleepHours: pt.sleepHours, rhr: pt.rhr, recovery, strain: 0 };
+    return { date, hrv: pt.hrv, sleepHours: pt.sleepHours, rhr: pt.rhr, recovery, strain: pt.strain };
   });
 
   trendsCache.set(cacheKey, { data: points, ts: Date.now() });

@@ -57,7 +57,7 @@ export default function SleepPage() {
   };
 
   const maxBarHours = Math.max(TARGET_HOURS + 1, ...sleepHours);
-  const maxDebtAbs = Math.max(...sleepHours.map(h => Math.abs(TARGET_HOURS - h)), 0.5);
+  const maxDebtAbs = Math.max(...sleepHours.filter(h => h > 0).map(h => Math.abs(TARGET_HOURS - h)), 0.5);
 
   return (
     <div className="min-h-screen bg-bg">
