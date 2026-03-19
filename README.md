@@ -4,7 +4,9 @@
 
 A personal health dashboard that connects to Garmin Connect and displays your daily metrics in a clean, mobile-first interface. Works with demo data if no credentials are configured.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cggmx/garmin-health-dashboard&env=GARMIN_USERNAME,GARMIN_PASSWORD&envDescription=Garmin%20Connect%20credentials.%20Leave%20empty%20to%20use%20demo%20data.&project-name=garmin-health-dashboard&repository-name=garmin-health-dashboard)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/git/external?repository-url=https%3A%2F%2Fgithub.com%2Fcggmx%2Fgarmin-health-dashboard&env=GARMIN_USERNAME,GARMIN_PASSWORD&envDescription=Garmin%20Connect%20credentials.%20Leave%20empty%20to%20use%20demo%20data.&project-name=garmin-health-dashboard)
+
+> **Auto-updates:** deploying with this button connects your Vercel project directly to this repository. When a new version is released, Vercel redeploys your instance automatically — no action needed on your end.
 
 ---
 
@@ -63,6 +65,16 @@ Click the **Deploy with Vercel** button above. You'll be prompted for:
 | `ANTHROPIC_API_KEY` | No | For AI weekly summary (Claude Haiku) |
 
 Leave credentials empty to run in demo mode.
+
+**Keeping your instance up to date**
+
+Since your Vercel project points directly to this repository, new releases deploy to your instance automatically. If you deployed before v1.5.0 (i.e. you have your own forked GitHub repo), you can enable auto-sync by activating the included workflow:
+
+1. Open your forked repo on GitHub
+2. Go to **Actions** tab → enable workflows if prompted
+3. Find **"Sync fork with upstream"** → click **Run workflow**
+
+From that point on, every Monday your fork syncs automatically and Vercel redeploys.
 
 ### Option B — Manual deploy
 
@@ -187,7 +199,9 @@ This project is free and open-source. If it's useful to you and you'd like to su
 
 Dashboard personal de salud que se conecta a Garmin Connect y muestra tus métricas diarias en una interfaz móvil limpia. Funciona con datos demo si no hay credenciales configuradas.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cggmx/garmin-health-dashboard&env=GARMIN_USERNAME,GARMIN_PASSWORD&envDescription=Credenciales%20de%20Garmin%20Connect.%20Deja%20vacío%20para%20usar%20datos%20demo.&project-name=garmin-health-dashboard&repository-name=garmin-health-dashboard)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/git/external?repository-url=https%3A%2F%2Fgithub.com%2Fcggmx%2Fgarmin-health-dashboard&env=GARMIN_USERNAME,GARMIN_PASSWORD&envDescription=Credenciales%20de%20Garmin%20Connect.%20Deja%20vacío%20para%20usar%20datos%20demo.&project-name=garmin-health-dashboard)
+
+> **Actualizaciones automáticas:** al desplegar con este botón, tu proyecto Vercel queda conectado directamente a este repositorio. Cuando se lanza una nueva versión, Vercel redespliega tu instancia automáticamente — sin que tengas que hacer nada.
 
 ---
 
@@ -246,6 +260,16 @@ Haz clic en el botón **Deploy with Vercel** de arriba. Se te pedirán:
 | `ANTHROPIC_API_KEY` | No | Para el resumen IA semanal (Claude Haiku) |
 
 Deja las credenciales vacías para ejecutar en modo demo.
+
+**Mantener tu instancia actualizada**
+
+Al usar este botón, tu proyecto Vercel queda conectado directamente a este repositorio y las nuevas versiones se despliegan solas. Si desplegaste antes de v1.5.0 (es decir, tienes tu propio repositorio fork en GitHub), puedes activar la sincronización automática así:
+
+1. Abre tu fork en GitHub
+2. Ve a la pestaña **Actions** → activa los workflows si te lo pide
+3. Busca **"Sync fork with upstream"** → haz clic en **Run workflow**
+
+A partir de ahí, cada lunes tu fork se sincroniza solo y Vercel redespliega.
 
 ### Opción B — Deploy manual
 
