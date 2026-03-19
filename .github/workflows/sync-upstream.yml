@@ -1,0 +1,33 @@
+name: Sync fork with upstream
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync with cggmx/garmin-health-dashboard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add upstream remote and sync
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/cggmx/garmin-health-dashboard.git || true
+          git fetch upstream
+          git checkout main
+          git merge upstream/main --no-edit --allow-unrelated-histories || {
+            echo "Merge conflict detected — skipping auto-sync."
+            exit 0
+          }
+          git push origin main
