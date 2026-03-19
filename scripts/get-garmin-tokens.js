@@ -64,53 +64,40 @@ function isMfaHtml(html) {
 async function completeMfaLogin(httpClient, mfaHtml) {
   const TICKET_RE = /ticket=([^"&\s]+)/;
 
-  // Parse form action URL
-  const actionMatch = mfaHtml.match(/action="([^"]+)"/);
-  const mfaUrl = actionMatch
-    ? actionMatch[1].replace(/&amp;/g, '&')
-    : 'https://sso.garmin.com/sso/verifyMFA/loginEnterMfaCode';
+  // Use the known Garmin MFA endpoint directly — parsed action URLs are unreliable
+  const MFA_URL = 'https://sso.garmin.com/sso/verifyMFA/loginEnterMfaCode';
 
-  // Parse CSRF token — find the <input> element that mentions _csrf, then extract value
-  // This handles any attribute order and quote style
+  // Parse CSRF token — try multiple formats, optional if not found
   const csrfInputEl = mfaHtml.match(/<input[^>]+_csrf[^>]*>/i);
   const csrfToken = csrfInputEl
     ? (csrfInputEl[0].match(/value=["']([^"']+)["']/i) || [])[1]
     : null;
-
-  // Fallback: try meta tag or JS variable (some Garmin pages embed it differently)
   const csrfFallback = !csrfToken
     ? (mfaHtml.match(/["']_csrf["']\s*[,:]\s*["']([^"']+)["']/i) || [])[1]
     : null;
-
   const csrf = csrfToken || csrfFallback;
-  // csrf may be null — we'll try without it if needed (some Garmin SSO flows
-  // don't require it when session cookies are present)
-
-  // Detect field name (mfa / verificationCode / code / otpCode)
-  const fieldMatch = mfaHtml.match(/name=["']?(mfa|verificationCode|code|otpCode)["']?/i);
-  const fieldName = fieldMatch ? fieldMatch[1] : 'mfa';
 
   // Prompt for code
   const mfaCode = await prompt('\n📧  Enter the verification code from your email: ');
   if (!mfaCode) throw new Error('No verification code entered.');
 
-  // POST MFA using URLSearchParams (no extra dependencies, works on all platforms)
+  // POST to Garmin MFA endpoint
+  // Field name is always 'mfa' on Garmin's current SSO
   const params = new URLSearchParams();
-  params.set(fieldName, mfaCode.trim());
+  params.set('mfa', mfaCode.trim());
   if (csrf) params.set('_csrf', csrf);
   params.set('embed', 'true');
-  params.set('fromPage', 'setupPasswordPage');
 
-  // Use the same axios instance (preserves cookies from the login session)
+  // Use the same axios instance (preserves session cookies)
   const axiosInst = httpClient.client;
-  const response = await axiosInst.post(mfaUrl, params.toString(), {
+  const response = await axiosInst.post(MFA_URL, params.toString(), {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Origin: 'https://sso.garmin.com',
       Referer: 'https://sso.garmin.com/sso/signin',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     },
-    maxRedirects: 5,
+    maxRedirects: 10,
   });
 
   const html = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
