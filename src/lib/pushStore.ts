@@ -1,54 +1,78 @@
 /**
- * Push subscription store — module-level singleton.
+ * Push subscription store — persists to /tmp on Vercel.
  *
- * Why no database?
- *  This is a single-user app. The client re-registers its subscription on every
- *  page load when notifications are enabled (via PushNotificationManager), so
- *  the store is always fresh while the user has the app open.
+ * Why /tmp?
+ *  Vercel serverless functions can write to /tmp. It's ephemeral across
+ *  cold starts but persists within the same container session — much more
+ *  reliable than a pure in-memory variable for the cron-check use case.
  *
- *  Cold-start gap: if Vercel cold-starts the function before the user has visited,
- *  the cron check will find no subscription and skip silently. The subscription
- *  is restored the next time the user opens the app (usually within minutes).
- *
- *  To make it fully persistent add @vercel/kv and replace saveSubscription /
- *  getStoredSubscription with KV reads/writes — the rest of the code stays the same.
+ *  For full persistence across cold starts, replace with @vercel/kv.
  */
 
+import * as fs   from 'fs';
+import * as path from 'path';
 import type { PushSubscription as WebPushSubscription } from 'web-push';
+
+const STORE_PATH = '/tmp/garmin_push_store.json';
 
 export interface StoredPushData {
   subscription: WebPushSubscription;
-  threshold:    number;   // battery % that triggers an alert (user-configurable)
-  lastSentAt:   number;   // unix timestamp (ms) of last push, for cooldown
+  threshold:    number;
+  lastSentAt:   number;
 }
-
-/** In-memory store — survives across requests in the same serverless instance. */
-let store: StoredPushData | null = null;
 
 /** Cooldown: don't send another notification within this window (ms). */
 const COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3 hours
 
+// In-memory cache for fast reads within the same invocation
+let memCache: StoredPushData | null = null;
+
+function readStore(): StoredPushData | null {
+  if (memCache) return memCache;
+  try {
+    const raw = fs.readFileSync(STORE_PATH, 'utf8');
+    memCache = JSON.parse(raw) as StoredPushData;
+    return memCache;
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(data: StoredPushData): void {
+  memCache = data;
+  try {
+    fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
+    fs.writeFileSync(STORE_PATH, JSON.stringify(data), 'utf8');
+  } catch {
+    // /tmp not writable in some environments — in-memory fallback still works
+  }
+}
+
 export function saveSubscription(sub: WebPushSubscription, threshold: number): void {
-  store = {
+  const existing = readStore();
+  writeStore({
     subscription: sub,
     threshold,
-    lastSentAt: store?.lastSentAt ?? 0, // preserve existing cooldown on re-register
-  };
+    lastSentAt: existing?.lastSentAt ?? 0,
+  });
 }
 
 export function getStoredSubscription(): StoredPushData | null {
-  return store;
+  return readStore();
 }
 
 export function markSent(): void {
-  if (store) store.lastSentAt = Date.now();
+  const existing = readStore();
+  if (existing) writeStore({ ...existing, lastSentAt: Date.now() });
 }
 
 export function isCoolingDown(): boolean {
+  const store = readStore();
   if (!store) return false;
   return Date.now() - store.lastSentAt < COOLDOWN_MS;
 }
 
 export function clearSubscription(): void {
-  store = null;
+  memCache = null;
+  try { fs.unlinkSync(STORE_PATH); } catch { /* ignore */ }
 }
