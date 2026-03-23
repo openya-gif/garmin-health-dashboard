@@ -104,30 +104,54 @@ async function ssoLogin(axiosInst, username, password) {
   if (lt)        loginBody.set('lt', lt);
   if (execution) loginBody.set('execution', execution);
 
-  const page2 = await axiosInst.post(signinUrl, loginBody.toString(), {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Origin: 'https://sso.garmin.com',
-      Referer: signinUrl,
-      'User-Agent': UA,
-    },
-    maxRedirects: 5,
-  });
+  // Step 2: POST credentials — DON'T auto-follow redirects so we can inspect each hop
+  let page2, redirectLocation = '';
+  try {
+    page2 = await axiosInst.post(signinUrl, loginBody.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Origin: 'https://sso.garmin.com',
+        Referer: signinUrl,
+        'User-Agent': UA,
+      },
+      maxRedirects: 0,
+      validateStatus: (s) => s < 400,
+    });
+    redirectLocation = page2.headers?.['location'] || '';
+  } catch (err) {
+    // axios throws on 3xx when maxRedirects=0 — treat as redirect
+    if (err.response?.status >= 300 && err.response?.status < 400) {
+      page2 = err.response;
+      redirectLocation = err.response.headers?.['location'] || '';
+    } else throw err;
+  }
 
   const html2 = typeof page2.data === 'string' ? page2.data : '';
 
-  // Success without MFA — ticket in response
-  const ticket2 = html2.match(/ticket=([^"&\s]+)/);
-  if (ticket2) return ticket2[1];
+  // Check for ticket immediately (no MFA account)
+  const ticketNow = (html2 + redirectLocation).match(/ticket=([^"&\s]+)/);
+  if (ticketNow) return ticketNow[1];
 
-  // Detect MFA by HTML content OR by final response URL
-  const finalUrl = page2.request?.res?.responseUrl || page2.config?.url || '';
-  const isMfaByUrl  = /MFA|verifyMFA|mfa/i.test(finalUrl);
-  const isMfaByHtml = /MFA|verif|enter.*code|email.*code|loginEnterMfa/i.test(html2);
+  // Resolve MFA page URL — either from redirect header or from html action
+  const isMfaRedirect = /MFA|verifyMFA/i.test(redirectLocation);
+  const isMfaHtml2    = /MFA|verif|enter.*code|email.*code/i.test(html2);
 
-  // If neither URL nor HTML looks like MFA, ask the user before giving up —
-  // Garmin sometimes sends the email code even when the HTML response is unexpected
-  if (!isMfaByUrl && !isMfaByHtml) {
+  let mfaPageHtml = html2;
+  let mfaPageUrl  = `${SSO}/verifyMFA/loginEnterMfaCode`;
+
+  if (isMfaRedirect && redirectLocation) {
+    // Follow the redirect manually to get the real MFA form page
+    const fullRedirect = redirectLocation.startsWith('http')
+      ? redirectLocation
+      : `https://sso.garmin.com${redirectLocation}`;
+    mfaPageUrl = fullRedirect;
+    const mfaPage = await axiosInst.get(fullRedirect, {
+      headers: { Referer: signinUrl, 'User-Agent': UA },
+      maxRedirects: 5,
+    });
+    mfaPageHtml = typeof mfaPage.data === 'string' ? mfaPage.data : '';
+  } else if (!isMfaHtml2) {
+    // Neither redirect nor HTML looks like MFA — ask the user
     const gotCode = await prompt(
       '\n⚠️  Unexpected response from Garmin. Did you receive a verification code by email? (yes/no): '
     );
@@ -139,9 +163,17 @@ async function ssoLogin(axiosInst, username, password) {
     }
   }
 
-  // Step 3: MFA — we are still in the same session, so the code will be accepted
+  // Step 3: MFA — session is still active, submit the code now
   console.log('  MFA required — check your email, a new code was just sent...');
-  const csrf2   = extractInput(html2, '_csrf');
+
+  // Extract CSRF and action URL from the actual MFA form page
+  const csrf2      = extractInput(mfaPageHtml, '_csrf');
+  const actionEl   = mfaPageHtml.match(/action="([^"]+)"/);
+  const actionUrl  = actionEl ? actionEl[1].replace(/&amp;/g, '&') : mfaPageUrl;
+  const resolvedMfaUrl = actionUrl.startsWith('http')
+    ? actionUrl
+    : `https://sso.garmin.com${actionUrl}`;
+
   const mfaCode = await prompt('\n📧  Enter the code from your email: ');
   if (!mfaCode) throw new Error('No code entered.');
 
@@ -152,7 +184,7 @@ async function ssoLogin(axiosInst, username, password) {
   if (csrf2) mfaBody.set('_csrf', csrf2);
 
   const page3 = await axiosInst.post(
-    `${SSO}/verifyMFA/loginEnterMfaCode`,
+    resolvedMfaUrl,
     mfaBody.toString(),
     {
       headers: {
