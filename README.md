@@ -191,6 +191,14 @@ This project is free and open-source. If it's useful to you and you'd like to su
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-cggmx-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/cggmx)
 
+**Contact:** [etxt.me/](https://www.etxt.me/)
+
+---
+
+## Acknowledgements
+
+- [garth](https://github.com/matin/garth) by [@matin](https://github.com/matin) — the MFA token script uses Garmin's mobile JSON API, an approach discovered and documented in the garth project.
+
 ---
 
 ---
@@ -385,3 +393,11 @@ Esta app es gratuita y de código abierto. Si te es útil y quieres agradecerlo,
 Este proyecto es gratuito y de código abierto. Si te resulta útil y quieres apoyar su desarrollo, puedes invitarme un café — completamente opcional, siempre agradecido. ☕
 
 [![Invítame un café](https://img.shields.io/badge/Invítame%20un%20café-cggmx-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/cggmx)
+
+**Contacto:** [etxt.me/](https://www.etxt.me/)
+
+---
+
+## Agradecimientos
+
+- [garth](https://github.com/matin/garth) por [@matin](https://github.com/matin) — el script de tokens MFA usa la API JSON móvil de Garmin, un enfoque descubierto y documentado en el proyecto garth.
