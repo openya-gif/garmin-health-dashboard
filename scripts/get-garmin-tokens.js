@@ -57,45 +57,71 @@ async function prompt(question, hidden = false) {
 // ── Garmin mobile API login (garth-inspired approach) ────────────────────────
 // Uses Garmin's JSON mobile API instead of HTML form scraping.
 // Endpoints and response structure from https://github.com/matin/garth
-async function loginWithMobileApi(axiosInst, username, password) {
+// Uses its own cookie jar (tough-cookie) so SSO session is always preserved.
+async function loginWithMobileApi(username, password) {
+  const axios = require('axios');
+  const { CookieJar } = require('tough-cookie');
+
   const SSO     = 'https://sso.garmin.com';
   const SERVICE = 'https://mobile.integration.garmin.com/gcm/android';
   const CLIENT  = 'GCM_ANDROID_DARK';
-
-  // garth uses iPhone UA for SSO pages to avoid Cloudflare challenges
-  const SSO_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
-  const SSO_HEADERS = {
+  const SSO_UA  = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+  const BASE_HEADERS = {
     'User-Agent': SSO_UA,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept': 'application/json, text/html, */*',
     'Accept-Language': 'en-US,en;q=0.9',
   };
-  const LOGIN_PARAMS = { clientId: CLIENT, locale: 'en-US', service: SERVICE };
+  const LOGIN_PARAMS = `clientId=${CLIENT}&locale=en-US&service=${encodeURIComponent(SERVICE)}`;
+
+  // Own cookie jar — completely independent of garmin-connect's session
+  const jar = new CookieJar();
+
+  // Helper: GET or POST with automatic cookie send/receive
+  async function req(method, url, { params, body, extraHeaders } = {}) {
+    const fullUrl = params ? `${url}?${params}` : url;
+    const cookies = await jar.getCookies(fullUrl);
+    const cookieHeader = cookies.map(c => `${c.key}=${c.value}`).join('; ');
+
+    const resp = await axios({
+      method,
+      url: fullUrl,
+      data: body,
+      headers: {
+        ...BASE_HEADERS,
+        ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+        ...(extraHeaders || {}),
+      },
+      validateStatus: (s) => s < 500,
+      maxRedirects: 5,
+    });
+
+    // Store any new cookies from response
+    const setCookies = resp.headers['set-cookie'] || [];
+    for (const c of setCookies) {
+      await jar.setCookie(c, fullUrl).catch(() => {});
+    }
+
+    return resp;
+  }
 
   // Step 1: GET sign-in page — establishes session cookies
-  await axiosInst.get(`${SSO}/mobile/sso/en/sign-in`, {
-    params: { clientId: CLIENT },
-    headers: { ...SSO_HEADERS, 'Sec-Fetch-Site': 'none' },
-  });
+  await req('GET', `${SSO}/mobile/sso/en/sign-in`, { params: `clientId=${CLIENT}` });
 
   // Step 2: POST credentials as JSON
-  const loginResp = await axiosInst.post(
-    `${SSO}/mobile/api/login`,
-    { username, password, rememberMe: false, captchaToken: '' },
-    {
-      params: LOGIN_PARAMS,
-      headers: { ...SSO_HEADERS, 'Content-Type': 'application/json' },
-      validateStatus: (s) => s < 500,
-    }
-  );
+  const loginResp = await req('POST', `${SSO}/mobile/api/login`, {
+    params: LOGIN_PARAMS,
+    body: JSON.stringify({ username, password, rememberMe: false, captchaToken: '' }),
+    extraHeaders: { 'Content-Type': 'application/json' },
+  });
 
   const loginData = loginResp.data;
-  // garth: response is nested under responseStatus
   const status = loginData?.responseStatus?.type || loginData?.type;
 
   if (!status) {
     throw new Error(
       'Unexpected response from Garmin. Check your email and password.\n' +
-      'If correct, Garmin may be rate-limiting your account — wait 1-2 hours and try again.'
+      'If correct, Garmin may be rate-limiting your account — wait 1-2 hours and try again.\n' +
+      `(Raw response: ${JSON.stringify(loginData).slice(0, 200)})`
     );
   }
 
@@ -107,28 +133,24 @@ async function loginWithMobileApi(axiosInst, username, password) {
     const mfaCode = await prompt('\n📧  Enter the code from your email: ');
     if (!mfaCode) throw new Error('No code entered.');
 
-    const mfaResp = await axiosInst.post(
-      `${SSO}/mobile/api/mfa/verifyCode`,
-      {
+    const mfaResp = await req('POST', `${SSO}/mobile/api/mfa/verifyCode`, {
+      params: LOGIN_PARAMS,
+      body: JSON.stringify({
         mfaMethod: method,
         mfaVerificationCode: mfaCode.trim(),
         rememberMyBrowser: false,
         reconsentList: [],
         mfaSetup: false,
-      },
-      {
-        params: LOGIN_PARAMS,
-        headers: { ...SSO_HEADERS, 'Content-Type': 'application/json' },
-        validateStatus: (s) => s < 500,
-      }
-    );
+      }),
+      extraHeaders: { 'Content-Type': 'application/json' },
+    });
 
     const mfaData = mfaResp.data;
     const mfaStatus = mfaData?.responseStatus?.type || mfaData?.type;
     if (mfaStatus !== 'SUCCESSFUL') {
       throw new Error(
         `MFA failed (${mfaStatus || 'unknown'}).\n` +
-        '  • Make sure you use the code that arrived AFTER starting the script\n' +
+        '  • Use the code that arrived AFTER starting the script\n' +
         '  • Codes expire in ~5 minutes — run the script again if needed'
       );
     }
@@ -182,7 +204,7 @@ async function main() {
 
   let serviceTicketUrl;
   try {
-    serviceTicketUrl = await loginWithMobileApi(axiosInst, user, pass);
+    serviceTicketUrl = await loginWithMobileApi(user, pass);
     console.log('  Login successful ✓');
   } catch (err) {
     console.error('\n❌ ', err.message);
