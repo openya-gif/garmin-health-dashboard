@@ -56,38 +56,43 @@ async function prompt(question, hidden = false) {
 
 // ── Garmin mobile API login (garth-inspired approach) ────────────────────────
 // Uses Garmin's JSON mobile API instead of HTML form scraping.
-// This makes the MFA flow reliable — no CSRF parsing, no HTML, just JSON.
+// Endpoints and response structure from https://github.com/matin/garth
 async function loginWithMobileApi(axiosInst, username, password) {
-  const SSO      = 'https://sso.garmin.com';
-  const SERVICE  = 'https://connect.garmin.com/modern/';
-  const CLIENT   = 'GCM_ANDROID_DARK';
-  const MOBILE_UA = 'com.garmin.android.apps.connectmobile';
-  const BROWSER_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+  const SSO     = 'https://sso.garmin.com';
+  const SERVICE = 'https://mobile.integration.garmin.com/gcm/android';
+  const CLIENT  = 'GCM_ANDROID_DARK';
 
-  // Step 1: GET sign-in page to establish session cookies
+  // garth uses iPhone UA for SSO pages to avoid Cloudflare challenges
+  const SSO_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+  const SSO_HEADERS = {
+    'User-Agent': SSO_UA,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
+  const LOGIN_PARAMS = { clientId: CLIENT, locale: 'en-US', service: SERVICE };
+
+  // Step 1: GET sign-in page — establishes session cookies
   await axiosInst.get(`${SSO}/mobile/sso/en/sign-in`, {
     params: { clientId: CLIENT },
-    headers: { 'User-Agent': BROWSER_UA },
+    headers: { ...SSO_HEADERS, 'Sec-Fetch-Site': 'none' },
   });
 
-  // Step 2: POST credentials as JSON — returns structured response
+  // Step 2: POST credentials as JSON
   const loginResp = await axiosInst.post(
     `${SSO}/mobile/api/login`,
     { username, password, rememberMe: false, captchaToken: '' },
     {
-      params: { clientId: CLIENT, locale: 'en-US', service: SERVICE },
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': MOBILE_UA,
-        Origin: SSO,
-      },
+      params: LOGIN_PARAMS,
+      headers: { ...SSO_HEADERS, 'Content-Type': 'application/json' },
       validateStatus: (s) => s < 500,
     }
   );
 
   const loginData = loginResp.data;
+  // garth: response is nested under responseStatus
+  const status = loginData?.responseStatus?.type || loginData?.type;
 
-  if (!loginData?.type) {
+  if (!status) {
     throw new Error(
       'Unexpected response from Garmin. Check your email and password.\n' +
       'If correct, Garmin may be rate-limiting your account — wait 1-2 hours and try again.'
@@ -95,9 +100,9 @@ async function loginWithMobileApi(axiosInst, username, password) {
   }
 
   // Step 3: Handle MFA if required
-  if (loginData.type === 'MFA_REQUIRED') {
-    const method = loginData.preferredMethod || 'email';
-    console.log(`  MFA required (method: ${method}) — check your email for a new code...`);
+  if (status === 'MFA_REQUIRED') {
+    const method = loginData?.customerMfaInfo?.mfaLastMethodUsed || 'email';
+    console.log(`  MFA required (${method}) — a new code was sent to your email...`);
 
     const mfaCode = await prompt('\n📧  Enter the code from your email: ');
     if (!mfaCode) throw new Error('No code entered.');
@@ -112,36 +117,29 @@ async function loginWithMobileApi(axiosInst, username, password) {
         mfaSetup: false,
       },
       {
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': MOBILE_UA,
-          Origin: SSO,
-        },
+        params: LOGIN_PARAMS,
+        headers: { ...SSO_HEADERS, 'Content-Type': 'application/json' },
         validateStatus: (s) => s < 500,
       }
     );
 
     const mfaData = mfaResp.data;
-    if (mfaData?.type !== 'SUCCESSFUL') {
+    const mfaStatus = mfaData?.responseStatus?.type || mfaData?.type;
+    if (mfaStatus !== 'SUCCESSFUL') {
       throw new Error(
-        'MFA code rejected or expired.\n' +
-        '  • Enter the code that arrived AFTER starting the script\n' +
+        `MFA failed (${mfaStatus || 'unknown'}).\n` +
+        '  • Make sure you use the code that arrived AFTER starting the script\n' +
         '  • Codes expire in ~5 minutes — run the script again if needed'
       );
     }
-
-    // Use the serviceTicketUrl from MFA response if available
-    if (mfaData.serviceTicketUrl) {
-      return mfaData.serviceTicketUrl;
-    }
-  } else if (loginData.type !== 'SUCCESSFUL') {
-    throw new Error(
-      `Login failed (${loginData.type}). Check your email and password.`
-    );
+    return mfaData.serviceTicketId || mfaData.serviceTicketUrl || null;
   }
 
-  // Return service ticket URL (will be followed to extract ticket)
-  return loginData.serviceTicketUrl || null;
+  if (status !== 'SUCCESSFUL') {
+    throw new Error(`Login failed (${status}). Check your email and password.`);
+  }
+
+  return loginData.serviceTicketId || loginData.serviceTicketUrl || null;
 }
 
 // ── Save tokens to Vercel ────────────────────────────────────────────────────
@@ -191,32 +189,20 @@ async function main() {
     process.exit(1);
   }
 
-  // Extract ticket from URL or follow the service ticket URL
+  // serviceTicketUrl is either a bare ticket string or a URL containing ticket=
   let ticket;
   try {
     if (serviceTicketUrl) {
-      // The serviceTicketUrl may contain the ticket directly or via redirect
-      const ticketInUrl = serviceTicketUrl.match(/ticket=([^&\s"]+)/);
-      if (ticketInUrl) {
-        ticket = ticketInUrl[1];
-      } else {
-        // Follow the URL to get the ticket
-        const ticketResp = await axiosInst.get(serviceTicketUrl, {
-          maxRedirects: 0,
-          validateStatus: (s) => s < 400,
-        }).catch(err => err.response);
-        const location = ticketResp?.headers?.['location'] || '';
-        const match = location.match(/ticket=([^&\s"]+)/);
-        if (match) ticket = match[1];
-      }
+      const inUrl = String(serviceTicketUrl).match(/ticket=([^&\s"]+)/);
+      ticket = inUrl ? inUrl[1] : String(serviceTicketUrl).trim();
     }
 
-    // Fall back to garmin-connect's standard login if mobile API didn't give us a ticket
-    if (!ticket) {
-      await client.login();
-    } else {
+    if (ticket) {
       await httpClient.getOauth1Token(ticket);
       await httpClient.exchange(httpClient.oauth1Token);
+    } else {
+      // Fallback: standard garmin-connect login (no MFA)
+      await client.login();
     }
   } catch (err) {
     console.error('\n❌  Failed to obtain OAuth tokens:', err.message);
