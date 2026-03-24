@@ -164,6 +164,78 @@ async function loginWithMobileApi(username, password) {
   return loginData.serviceTicketId || loginData.serviceTicketUrl || null;
 }
 
+// ── OAuth1→OAuth2 exchange (garth approach) ──────────────────────────────────
+// Fetches the consumer key from Garmin's S3 bucket (same as garth does) and
+// performs the OAuth1 preauth + OAuth2 exchange using oauth-1.0a.
+async function exchangeTicketForTokens(ticket) {
+  const axios  = require('axios');
+  const OAuth  = require('oauth-1.0a');
+  const crypto = require('crypto');
+
+  const CONNECT_API = 'https://connectapi.garmin.com';
+  const MOBILE_UA   = 'com.garmin.android.apps.connectmobile';
+  const LOGIN_URL   = 'https://mobile.integration.garmin.com/gcm/android';
+
+  // Step 4a: fetch consumer key/secret from garth's S3 bucket
+  const consumerResp = await axios.get('https://thegarth.s3.amazonaws.com/oauth_consumer.json');
+  const { consumer_key, consumer_secret } = consumerResp.data;
+
+  // Step 4b: GET OAuth1 preauthorized token using consumer-only OAuth1 signature
+  const oauth = OAuth({
+    consumer: { key: consumer_key, secret: consumer_secret },
+    signature_method: 'HMAC-SHA1',
+    hash_function: (base, key) =>
+      crypto.createHmac('sha1', key).update(base).digest('base64'),
+  });
+
+  const preAuthUrl = `${CONNECT_API}/oauth-service/oauth/preauthorized`;
+  const preAuthParams = {
+    ticket,
+    'login-url': LOGIN_URL,
+    'accepts-mfa-tokens': 'true',
+  };
+  const fullPreAuthUrl = `${preAuthUrl}?${new URLSearchParams(preAuthParams)}`;
+
+  const preAuthHeader = oauth.toHeader(
+    oauth.authorize({ url: fullPreAuthUrl, method: 'GET' })
+  );
+
+  const preAuthResp = await axios.get(fullPreAuthUrl, {
+    headers: { ...preAuthHeader, 'User-Agent': MOBILE_UA },
+  });
+
+  // Response is URL-encoded: oauth_token=...&oauth_token_secret=...&mfa_token=...
+  const preAuthData = new URLSearchParams(preAuthResp.data);
+  const oauth1Token = {
+    oauth_token:        preAuthData.get('oauth_token'),
+    oauth_token_secret: preAuthData.get('oauth_token_secret'),
+    mfa_token:          preAuthData.get('mfa_token') || undefined,
+  };
+
+  // Step 5: exchange OAuth1 → OAuth2
+  const exchangeUrl = `${CONNECT_API}/oauth-service/oauth/exchange/user/2.0`;
+  const exchangeHeader = oauth.toHeader(
+    oauth.authorize(
+      { url: exchangeUrl, method: 'POST' },
+      { key: oauth1Token.oauth_token, secret: oauth1Token.oauth_token_secret }
+    )
+  );
+
+  const exchangeBody = new URLSearchParams({ audience: 'GARMIN_CONNECT_MOBILE_ANDROID_DI' });
+  if (oauth1Token.mfa_token) exchangeBody.set('mfa_token', oauth1Token.mfa_token);
+
+  const exchangeResp = await axios.post(exchangeUrl, exchangeBody.toString(), {
+    headers: {
+      ...exchangeHeader,
+      'User-Agent': MOBILE_UA,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  });
+
+  const oauth2Token = exchangeResp.data;
+  return { oauth1Token, oauth2Token };
+}
+
 // ── Save tokens to Vercel ────────────────────────────────────────────────────
 function addVercelEnv(name, value, cwd) {
   const { execFileSync } = require('child_process');
@@ -211,28 +283,28 @@ async function main() {
     process.exit(1);
   }
 
-  // serviceTicketUrl is either a bare ticket string or a URL containing ticket=
-  let ticket;
-  try {
-    if (serviceTicketUrl) {
-      const inUrl = String(serviceTicketUrl).match(/ticket=([^&\s"]+)/);
-      ticket = inUrl ? inUrl[1] : String(serviceTicketUrl).trim();
-    }
+  // Extract bare ticket from serviceTicketId (may be a plain string or contain ticket=)
+  const ticketStr = serviceTicketUrl
+    ? (String(serviceTicketUrl).match(/ticket=([^&\s"]+)/)?.[1] ?? String(serviceTicketUrl).trim())
+    : null;
 
-    if (ticket) {
-      await httpClient.getOauth1Token(ticket);
-      await httpClient.exchange(httpClient.oauth1Token);
+  let oauth1, oauth2;
+  try {
+    if (ticketStr) {
+      // MFA path: use garth-style OAuth exchange with consumer key from S3
+      const tokens = await exchangeTicketForTokens(ticketStr);
+      oauth1 = tokens.oauth1Token;
+      oauth2 = tokens.oauth2Token;
     } else {
-      // Fallback: standard garmin-connect login (no MFA)
+      // No MFA: fall back to garmin-connect standard login
       await client.login();
+      oauth1 = httpClient.oauth1Token;
+      oauth2 = httpClient.oauth2Token;
     }
   } catch (err) {
     console.error('\n❌  Failed to obtain OAuth tokens:', err.message);
     process.exit(1);
   }
-
-  const oauth1 = httpClient.oauth1Token;
-  const oauth2 = httpClient.oauth2Token;
 
   if (!oauth1 || !oauth2) {
     console.error('❌  Could not extract OAuth tokens. Try again.');
