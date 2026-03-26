@@ -118,6 +118,19 @@ async function loginWithMobileApi(username, password) {
   const status = loginData?.responseStatus?.type || loginData?.type;
 
   if (!status) {
+    const isRateLimit =
+      loginResp.status === 429 ||
+      JSON.stringify(loginData).includes('"429"') ||
+      JSON.stringify(loginData).includes("429");
+    if (isRateLimit) {
+      throw new Error(
+        'Garmin is blocking your account due to too many failed attempts (rate limit 429).\n' +
+        '  • Wait 24–48 hours before trying again\n' +
+        '  • Try from a different Wi-Fi network or mobile hotspot\n' +
+        '  • Do NOT run the script again until the wait period is over\n' +
+        `(Raw response: ${JSON.stringify(loginData).slice(0, 200)})`
+      );
+    }
     throw new Error(
       'Unexpected response from Garmin. Check your email and password.\n' +
       'If correct, Garmin may be rate-limiting your account — wait 1-2 hours and try again.\n' +
