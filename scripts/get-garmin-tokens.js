@@ -215,7 +215,16 @@ async function exchangeTicketForTokens(ticket) {
 
   const preAuthResp = await axios.get(fullPreAuthUrl, {
     headers: { ...preAuthHeader, 'User-Agent': MOBILE_UA },
+    validateStatus: () => true,
   });
+
+  if (preAuthResp.status !== 200) {
+    throw new Error(
+      `OAuth preauth failed (HTTP ${preAuthResp.status}).\n` +
+      `  Ticket used: ${ticket}\n` +
+      `  Response: ${JSON.stringify(preAuthResp.data).slice(0, 300)}`
+    );
+  }
 
   // Response is URL-encoded: oauth_token=...&oauth_token_secret=...&mfa_token=...
   const preAuthData = new URLSearchParams(preAuthResp.data);
@@ -224,6 +233,13 @@ async function exchangeTicketForTokens(ticket) {
     oauth_token_secret: preAuthData.get('oauth_token_secret'),
     mfa_token:          preAuthData.get('mfa_token') || undefined,
   };
+
+  if (!oauth1Token.oauth_token) {
+    throw new Error(
+      `OAuth preauth returned no token.\n` +
+      `  Raw response: ${String(preAuthResp.data).slice(0, 300)}`
+    );
+  }
 
   // Step 5: exchange OAuth1 → OAuth2
   const exchangeUrl = `${CONNECT_API}/oauth-service/oauth/exchange/user/2.0`;
@@ -243,7 +259,15 @@ async function exchangeTicketForTokens(ticket) {
       'User-Agent': MOBILE_UA,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
+    validateStatus: () => true,
   });
+
+  if (exchangeResp.status !== 200) {
+    throw new Error(
+      `OAuth exchange failed (HTTP ${exchangeResp.status}).\n` +
+      `  Response: ${JSON.stringify(exchangeResp.data).slice(0, 300)}`
+    );
+  }
 
   const oauth2Token = exchangeResp.data;
   return { oauth1Token, oauth2Token };
