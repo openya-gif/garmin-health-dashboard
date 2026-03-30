@@ -243,15 +243,19 @@ async function exchangeTicketForTokens(ticket) {
 
   // Step 5: exchange OAuth1 → OAuth2
   const exchangeUrl = `${CONNECT_API}/oauth-service/oauth/exchange/user/2.0`;
+
+  // Body params must be passed to oauth.authorize() so they're included in the signature
+  const exchangeBodyData = { audience: 'GARMIN_CONNECT_MOBILE_ANDROID_DI' };
+  if (oauth1Token.mfa_token) exchangeBodyData.mfa_token = oauth1Token.mfa_token;
+
   const exchangeHeader = oauth.toHeader(
     oauth.authorize(
-      { url: exchangeUrl, method: 'POST' },
+      { url: exchangeUrl, method: 'POST', data: exchangeBodyData },
       { key: oauth1Token.oauth_token, secret: oauth1Token.oauth_token_secret }
     )
   );
 
-  const exchangeBody = new URLSearchParams({ audience: 'GARMIN_CONNECT_MOBILE_ANDROID_DI' });
-  if (oauth1Token.mfa_token) exchangeBody.set('mfa_token', oauth1Token.mfa_token);
+  const exchangeBody = new URLSearchParams(exchangeBodyData);
 
   const exchangeResp = await axios.post(exchangeUrl, exchangeBody.toString(), {
     headers: {
